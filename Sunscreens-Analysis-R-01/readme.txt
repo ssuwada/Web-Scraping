@@ -1,11 +1,12 @@
-This project was created for web scraping clasess. First part that is related to scraping data was created by me, other part what is cleaning data and preparing it with analysis was coded by Sandra Stanowska. 
+# Sunscreens Web scraping project 
 
-In project you can finde:
-- Cleaned CSV file with all of the sunscreens avaliable on ulta.com
-- Not cleaned CSV
+This project, initially created for web scraping classes, involves two contributors. I handled the first part, which involves scraping data, while ** Sandra Stanowska ** took care of the data cleaning, preparation, and analysis. The project includes:
 
-- Code for Scraping data
-- Main core of code
-- spf file what is mainly used to analysis of data
-- .html file what is just basicaly raport about what we created
-- .rmd file - template to generate html raport
+
+- cleaned CSV file containing information about all sunscreens available on ulta.com
+- an uncleaned CSV file
+- code for scraping data
+- the main core of the code
+- an SPF file primarily used for data analysis
+- an HTML file serving as a basic report on our project
+- an R Markdown (.rmd) file, which serves as a template for generating an HTML report
