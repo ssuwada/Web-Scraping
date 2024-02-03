@@ -1,0 +1,494 @@
+---
+title: "Sunscreen check: exposing harmful ingredients, price points, and ratings"
+author: "Sandra Stanowska & Sebastian Suwada"
+date: "`r format(Sys.time(), '%m/%d/%Y %X')`"
+output:
+  rmdformats::readthedown:
+    highlight: kate
+    number_sections: true
+    self_contained: true
+---
+
+```{r setup, include=FALSE}
+## Global options
+library(knitr)
+opts_chunk$set(echo = TRUE, 
+               cache = FALSE,
+               prompt = FALSE,
+               tidy = TRUE,
+               comment = NA,
+               message = FALSE,
+               warning = FALSE,
+               fig.width = 7.4,
+               fig.height = 4.7,
+               fig.align = "center")
+opts_knit$set(width = 80)
+```
+<span style="font-weight: bold; font-size: 25px;">How sunscreen affects us ?</span>
+
+# Introduction: Relationship between sunscreen, beaches, and coral reefs
+
+
+## About the research
+
+<span style="font-size: 20px;">
+
+We all love a good beach day, soaking up the sun, swimming, and enjoying the breeze. 
+
+But did you know that the sunscreen we use might be harming the environment and us!
+
+This project aims to investigate whether sunscreens contain any harmful ingredients and explore how these factors relate to the popularity and pricing of these products.
+
+- We're focusing on sunscreens from a popular cosmetics website in the USA `www.ulta.com`
+
+- To obtain that we are utilizing R programming to gather and analyze the data. 
+
+In our database, it's important to note that alongside SPF creams, the dataset includes bronzers. However, for the purpose of analyzing harmful ingredients, bronzes have been excluded from the analysis. This decision is based on the understanding that harmful substances are more likely to be present in SPF creams. Therefore, in our analysis, we focus on SPF creams to assess the potential risks associated with certain ingredients. As a result, bronzers are considered safe for skin application, and our conclusions regarding harmful ingredients pertain specifically to SPF creams, providing insights into their safety and potential implications on health, such as the risk of diseases like cancer.
+
+Let's uncover the story behind our creams choices and their impact on the places we love to visit.
+</span>
+
+## Harmful igredients - background
+
+<span style="font-size: 20px;">
+
+As summer arrives, it becomes imperative to apply sunscreen during sunbathing to safeguard our skin from sunburn.
+
+Numerous sunscreens contain potentially harmful ingredients that can lead to adverse effects on your skin and body, such as allergic reactions, hormone disruption, premature aging, and potentially an increased risk of cancer.
+
+We can categorize sunscreen ingredients into two types: `physical` and `chemical` (synthetic)
+
+Physical sunscreens, using minerals like titanium dioxide and zinc oxide, create a barrier on the skin, blocking UVA and UVB rays. They may be thick and leave residue. On the other hand, chemical sunscreens, with synthetic ingredients like `oxybenzone`, are absorbed into the skin but can lead to irritation and generate free radicals when exposed to the sun. Generally, physical sunscreens are considered safer and more skin-friendly.
+
+To enjoy the advantages of sunscreen while steering clear of potential side effects, steer away from these questionable ingredients before applying generously this summer:
+
+- `Oxybenzone`
+- `Octinoxate`
+- `Retinyl Palmitate`
+- `Homosalate`
+- `Octocrylene`
+</span>
+
+<span style="font-size: 10px;"> Based on page: `https://www.womenshealthmag.com/beauty/a19919520/6-scary-sunscreen-ingredients-and-6-safe-spf-products/?fbclid=IwAR1GUJ8oElP6mfjrxqHRohiq4Dv11Aj8DXGfvS4DEkipRXHy8rv7mu8GPcA`
+</span>
+
+# Data scraping
+
+<span style="font-size: 15px;">
+
+For the sake of clarity and to streamline the scraper's workflow, we have organized this work into two files. During our investigation on the webpage, we focused on sunscreens, revealing approximately 416 results encompassing a variety of specific creams and bronzes commonly used by individuals in the United States of America.
+
+Each of the product have on page section with specified:
+
+- Ingredients
+- Ratings 
+- Number of ratings
+- Name of product
+- Price
+
+That are the things we aimed to scrap during this research. 
+
+</span>
+
+## Main core of scraper
+
+<span style="font-weight: bold; font-size: 20px;">    a) Importing all dependencies and creating relations</span>
+
+Upload libraries and assign own main path of the project (data will be saved in this place):
+
+Using source() we added relation to the file scrapper.R, spf.R.
+
+```{r}
+library(tidyverse)
+library(rvest)
+library(httr)
+library(dplyr)
+library(stringi)
+library(ggplot2)
+
+setwd("C:/Users/sandr/Desktop/Web scrapping/Project")
+
+source('scrapper.R')
+source('spf.R')
+```
+
+<span style="font-weight: bold; font-size: 20px;">    b) Initialization of all the variables</span>
+
+For this task, we have defined the following variables without altering their names:
+
+- `baseURL`: this serves as the base link for generating links to subsequent pages.
+- `totalPages`: represents the total number of pages necessary to encompass all the data we intend to scrape.
+- `pageProducts`: a list initialized to store links of pages containing products from one page (page 0 to page 5).
+- `pageProductsTemp`: a temporary variable used to store one link during each iteration.
+
+```{r}
+baseURL <- "https://www.ulta.com/shop/body-care/suncare?page="
+totalPages <- 5  
+pageProducts <- list()
+pageProductsTemp <- list()
+```
+
+<span style="font-weight: bold; font-size: 20px;">    c) Loop for iterate over products</span>
+
+Product URLs are collected from before obtained pages, and the final result is a 
+vector of unique product URLs stored in the `pageProducts` variable.
+
+The for loop iterates through pages from 1 to `totalPages` number:
+
+- For each iteration, it constructs the URL for the current page using the `getPageUrl` function
+- Delay of 1 second `(Sys.sleep(1))` is introduced to avoid overloading the server and errors
+- The product URLs for page are obtained using the `getResponseProductUrls` function and stored in `pageProductsTemp`
+- The `pageProductsTemp` list is then combined with the existing `pageProducts` list
+- After the loop, the collected product URLs are unlisted and stored in the variable `pageProducts`(416 links)
+
+```{r}
+for (pageCurr in 1:totalPages) {
+  pageUrl <- getPageUrl(baseURL, pageCurr)
+  Sys.sleep(1)
+  pageProductsTemp <- getResponseProductUrls(pageUrl)
+  pageProducts <- c(pageProducts,pageProductsTemp)
+}
+```
+
+Creating one list of obtained links for products
+
+```{r}
+pageProducts <- unlist(pageProducts)
+```
+
+<span style="font-weight: bold; font-size: 20px;">    d) Gathering information about products</span>
+
+Create Data Frame for storage of informations about products
+
+```{r}
+allProductInfo <- data.frame(name = character(),
+                             stars = character(),
+                             reviews_amount = character(),
+                             price = character(),
+                             ingredients = character(),
+                             stringsAsFactors = FALSE)
+```
+
+For the purpose of showcase informations are gathered in this file only for 10 products
+
+
+- getResponseProductPagesScrapp(pageUrl): calls a function `getResponseProductPagesScrapp()` to retrieve response from page
+
+- getProductInfromation(responseProductInformations, pageCurr): calls function `getProductInfromation()` to extract relevant product information from the response and assigns it to the variable `productInfo`
+
+- rbind(allProductInfo, productInfo): appends the current product information to data frame `allProductInfo`. This step is performed iteratively in a loop to accumulate information from all of the pages
+
+```{r}
+for (pageCurr in 1:5) {
+  pageUrl <- pageProducts[pageCurr]
+  Sys.sleep(1)
+  responseProductInformations <- getResponseProductPagesScrapp(pageUrl)
+  productInfo <- getProductInfromation(responseProductInformations, pageCurr)
+  
+  allProductInfo <- rbind(allProductInfo, productInfo)
+}
+```
+
+## Functions descritpion form 'scrapper.R'
+
+### Preparing Urls to be scraped
+
+<span style="font-size: 20px;"> a) Getting information about URLs to scrap through </span>
+
+- sprintf("%s%d", baseURL, pageCurr): Constructs a URL based on `baseURL` and number of `pageCurr`
+
+This function is designed to create a URL for a specific page by combining a base URL `baseURL` with a page number `pageCurr`. The resulting `pageUrl` is then returned by the function. 
+
+
+```{r, eval=FALSE}
+getPageUrl <- function(baseURL, pageCurr) {
+  pageUrl <- sprintf("%s%d", baseURL, pageCurr)
+  return(pageUrl)
+}
+```
+
+<span style="font-size: 20px;"> b) Getting response from page from created links</span>
+
+- tryCatch: If successful, the response is stored in the `response` variable, if an error occurs, it returns NULL.
+- if (is.null(response)): if response is null it return Error message if not it proceeds to getting information from page. How this function `getProductURLs()` works is described below.
+- return(): function returns list consisting of all the scraped links from webpage that relates to products
+
+```{r, eval=FALSE}
+getResponseProductUrls <- function(url) {
+  response <- tryCatch({
+    httr::GET(url, user_agent= "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:108.0) Gecko/20100101 Firefox/108.0")
+  }, error = function(e) {
+    return(NULL)
+  })
+  
+  if (is.null(response)) {
+    cat(" ========= Error accessing ======== :", url, "\n")
+  } else {
+    cat("Page accessed successfully:", url, "\n")
+    listofProductPage <- getProductURLs(response)
+    return(listofProductPage)
+  }
+}
+```
+
+<span style="font-size: 20px;"> c) Getting all of the links to products from pages links</span>
+
+- content(response, type = "text/html", encoding = "UTF-8"): Extracts the content of the HTTP response
+- ContentSpfs %>% ... %>%(): `html_nodes` extract information from the href attribute of elements with the class `.ProductListingResults__productCard a`.
+
+This function is designed to extract product URLs from the HTML content of an HTTP response.
+
+```{r, eval=FALSE}
+getProductURLs <- function(response) {
+  ContentSpfs <- content(response, type = "text/html", encoding = "UTF-8")
+  
+  productURLs <- ContentSpfs %>% 
+    html_nodes('.ProductListingResults__productCard a') %>% 
+    html_attr("href") %>% 
+    unique()
+  
+  return(productURLs)
+}
+```
+
+### Scraping data from product Urls
+
+<span style="font-size: 20px;">   a) Get response from page that is assigned for specific product</span>
+
+Function works exactly the same like function from Part first point (b). It is checking the response and returning it to another function that scraps data from product page.
+
+```{r, eval=FALSE}
+getResponseProductPagesScrapp <- function(url) {
+  response <- tryCatch({
+    httr::GET(url, user_agent= "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:108.0) Gecko/20100101 Firefox/108.0")
+  }, error = function(e) {
+    return(NULL)
+  })
+  
+  if (is.null(response)) {
+    cat("Error accessing:", url, "\n")
+  } else {
+    cat("Page accessed successfully:", url, "\n")
+    return(response)
+  }
+}
+```
+
+<span style="font-size: 20px;">   b) Scrap specified data from product page </span>
+
+Iteration over all of the product links scraped in first part. Just like in previous `html_node()` we specified 
+for what place in html code we are looking for. This gives output as:
+
+- `nameProduct` : name of product
+- `starsProduct` : Stars review from users
+- `reviewsAmountProduct` : Amount of reviews
+- `priceProduct` : price of product
+- `ingredientsProduct` : ingredients of product
+
+Later based on scraped data - Data Frame is created what stores one row of obtained information for specific url - product.This is later combined with main Data Frame what stores all of the scraped information from products.
+
+```{r, eval=FALSE}
+getProductInfromation <- function(response, pageCurr) {
+  
+  cat("Scrapping product number:", pageCurr, "\n")
+  
+  ContentSpfs <- content(response, type = "text/html", encoding = "UTF-8")
+  
+  nameProduct <- ContentSpfs %>% 
+    html_node('div.ProductInformation h1') %>%
+    html_text()
+  
+  starsProduct <- ContentSpfs %>% 
+    html_node('div.ReviewStars span') %>%
+    html_text()
+  
+  reviewsAmountProduct <- ContentSpfs %>% 
+    html_node('div.ReviewStars a') %>%
+    html_text()
+  
+  priceProduct <- ContentSpfs %>% 
+    html_node('div.ProductPricing span') %>%
+    html_text()
+  
+  ingredientsProduct <- ContentSpfs %>% 
+    html_node("details:nth-child(3)") %>%
+    html_text()
+  
+  productInfo <- data.frame(
+    name = nameProduct,
+    stars = starsProduct,
+    reviews_amount = reviewsAmountProduct,
+    price = priceProduct,
+    ingredients = ingredientsProduct
+  )
+```
+
+
+```{r, eval=FALSE}
+getResponseProductPagesScrapp <- function(url) {
+  response <- tryCatch({
+    httr::GET(url, user_agent= "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:108.0) Gecko/20100101 Firefox/108.0")
+  }, error = function(e) {
+    return(NULL)
+  })
+  
+  if (is.null(response)) {
+    cat("Error accessing:", url, "\n")
+  } else {
+    cat("Page accessed successfully:", url, "\n")
+    return(response)
+  }
+}
+```
+
+# Data cleaning and analysis
+<span style="font-weight: bold; font-size: 20px;">    a) Bar plot showing the amount of safe and not safe sunscreens.</span>
+
+```{r, echo=FALSE}
+# Plot 1: Comparison of safe and not safe sunscreens
+spf_cleaned %>%
+  filter(safety != "Not Applicable") %>%
+  mutate(safety = as.factor(safety)) %>%
+  ggplot(aes(x = safety)) +
+  geom_bar(width = 0.7, fill = "skyblue", color = "white", position = "dodge") +  
+  labs(title = "Comparison of the amount of safe and not safe sunscreens", x = "Safety", y = "Amount") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+We divided the tanning products available at the website into sunscreens and bronzers. Then we checked how many of the list of 5 harmful ingrdients are in each sunscreen. If the amount was 1 and more the sunscreen was marked "Not Safe".
+
+<span style="font-weight: bold; font-size: 20px;">    b) Bar plot showing the amount of products and star rating categories for tanning products
+
+```{r, echo=FALSE}
+# Plot 2: Create a bar plot for the star categories
+spf_cleaned %>%
+  ggplot(aes(x = stars_category)) +
+  geom_bar(width = 0.7, fill = "salmon", color = "white", position = "dodge") +
+  labs(title = "Star rating categories for tanning products",
+       x = "Star Category",
+       y = "Amount") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))  
+```
+
+The plot illustrates a notable abundance of products attaining commendable ratings, with a significant majority falling within the elevated range of 4 to 5 stars.
+
+<span style="font-weight: bold; font-size: 20px;">    c) Scatter plot showing correlation between stars rating and number of harmful ingredients for sunscreens
+
+```{r, echo=FALSE}
+# Plot 3: Correlation between rating and safety
+spf_cleaned %>%
+  filter(safety != "Not Applicable") %>%
+  ggplot(aes(x = stars, y = harmful_ingredients_count, color = safety)) +
+  geom_point(size = 3, alpha = 0.7) +  
+  labs(title = "Correlation between stars rating and number of harmful ingredients for sunscreens",
+       x = "Stars Rating",
+       y = "Number of harmful ingredients") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+The graph indicates a noteworthy trend wherein sunscreens with the highest ratings often include at least one of the marked "Not Safe" ingredients, signaling a potential correlation between product efficacy, as perceived by users, and the presence of these identified harmful components.
+
+<span style="font-weight: bold; font-size: 20px;">    d) Bar plot showing correlation between different price categories and safety for sunscreens
+
+```{r, echo=FALSE}
+# Plot 4: Correlation plot between price categories and safety for sunscreens
+ggplot(filtered_data, aes(x = price_category, fill = safety)) +
+  geom_bar(position = "dodge", width = 0.7, color = "white") +  
+  labs(title = "Correlation between price category and safety for sunscreens", x = "Price Category", y = "Amount of sunscreens") +
+  scale_fill_manual(values = c("Safe" = "green", "Not Safe" = "red")) +  
+  theme_minimal() +
+  theme(legend.position = "bottom") 
+```
+
+The graph illustrates a distinct pattern where the majority of sunscreens labeled as "safe" are priced within the range of 10-20 dollars, with the second-highest concentration in the 30-40 dollar bracket. In contrast, for products marked as "not safe," a significant portion is observed in the 10-20 and 20-30 dollar price categories. Interestingly, a considerable number of safe sunscreens are also priced between 30-40 dollars, while a notable proportion of not-safe sunscreens are priced lower. This pricing distribution raises the possibility that individuals may opt for not-safe sunscreens due to their comparatively lower cost.
+
+<span style="font-weight: bold; font-size: 20px;">    e) Scatter plot showing correlation between price and number of harmful ingredients 
+
+```{r, echo=FALSE}
+
+# Plot 5: Price and Safety correlation plot
+spf_cleaned %>%
+  filter(safety != "Not Applicable") %>%
+  ggplot(aes(x = price, y = harmful_ingredients_count, color = safety)) +
+  geom_point(alpha = 0.7) +  # Adjust transparency
+  labs(title = "Correlation between price and number of harmful ingredients",
+       x = "Price",
+       y = "Number of harmful ingredients") +
+  theme_minimal() +
+  theme(legend.position = "bottom",  # Change legend position to the bottom
+        plot.title = element_text(hjust = 0.5)) +  # Center the title
+  scale_color_manual(values = c("Safe" = "green", "Not Safe" = "red"))  
+```
+
+The graph highlights a notable observation that the priciest sunscreen products are predominantly associated with the category of not-safe ingredients. Additionally, a commonality emerges in the pricing structure for both sunscreen groups, with a concentration observed in the 10 to 20 dollar range. However, a distinct trend is discernible as not-safe sunscreens exhibit a greater deviation towards higher prices compared to their safe counterparts.
+
+<span style="font-weight: bold; font-size: 20px;">    f) Scatter plot showing correlation between price and reviews amount
+
+
+```{r, echo=FALSE}
+# Plot 6: Price and Reviews correlation plot 
+spf_cleaned %>%
+  filter(!is.na(reviews_amount) & safety != "Not Applicable") %>%
+  ggplot(aes(x = price, y = reviews_amount, color = safety)) +
+  geom_point(alpha = 0.7, position = position_jitter(width = 0.2, height = 0)) +  # Add jitter
+  labs(title = "Correlation between price and reviews amount",
+       x = "Price",
+       y = "Reviews amount") +
+  theme_minimal() +
+  theme(legend.position = "bottom",  
+        plot.title = element_text(hjust = 0.5)) +
+  scale_color_manual(values = c("Safe" = "green", "Not Safe" = "red")) 
+```
+
+
+The safe sunscreens display a relatively stable pattern in terms of both review counts and prices. In contrast, the not-safe sunscreens exhibit a tendency to garner a higher number of reviews, suggesting a potential correlation with increased purchase frequency. Notably, the sunscreen with the highest number of reviews belongs to the not-safe category and is priced around 40 dollars, indicative of its popularity despite being in a higher price range.
+
+<span style="font-weight: bold; font-size: 20px;">    g) Scatter plot showing correlation between reviews amount and number of harmful ingredients
+
+```{r, echo=FALSE}
+# Plot 7: Reviews Amount and Safety correlation plot 
+spf_cleaned %>%
+  filter(safety != "Not Applicable" & !is.na(reviews_amount)) %>%
+  ggplot(aes(x = reviews_amount, y = harmful_ingredients_count, color = safety)) +
+  geom_point(alpha = 0.7) +  # Adjust transparency
+  labs(title = "Correlation between reviews amount and number of harmful ingredients",
+       x = "Reviews amount",
+       y = "Number of harmful ingredients") +
+  theme_minimal() +
+  theme(legend.position = "bottom",  # Change legend position to the bottom
+        plot.title = element_text(hjust = 0.5)) +  # Center the title
+  scale_color_manual(values = c("Safe" = "green", "Not Safe" = "red"))  
+```
+
+
+The trend observed in the data reveals that sunscreens with the highest number of harmful ingredients tend to receive fewer reviews. In contrast, those containing two harmful ingredients stand out with the largest number of reviews, suggesting heightened attention and possibly increased usage. Safe sunscreens also exhibit a substantial number of reviews, indicating a noteworthy level of consumer engagement and interest in these products.
+
+<span style="font-weight: bold; font-size: 20px;">    h) Bar plot showing amount of products in each price category for tanning products
+
+```{r, echo=FALSE}
+# Plot 8: Bar plot for price category and amount of all products
+spf_cleaned %>%
+  filter(!is.na(price_category)) %>%
+  ggplot(aes(x = price_category)) +
+  geom_bar() +
+  labs(title = "Amount of products in each price category",
+       x = "Price category",
+       y = "Amount of products") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5))
+
+```
+
+The pricing distribution depicted in the graph illustrates a peak concentration of products falling within the 10-20 dollar range. Following this, there is a descending trend, with fewer products as prices increase. Notably, the least number of products is observed in the category priced over 50 dollars. Additionally, there is a modest representation of the least expensive products, falling within the 0-10 dollar range.
+
+# Conclusions
+
+
+The data analysis points to several key trends in sunscreen products. High ratings, primarily between 4 and 5 stars, are prevalent, potentially linked to the presence of ingredients marked "Not Safe." Safe sunscreens are commonly priced between 10-20 dollars, while not-safe ones show a broader pricing distribution with a notable presence in the 10-30 dollar range. The most expensive sunscreens typically contain not-safe ingredients, suggesting a trade-off between safety and cost.
+
+In terms of consumer engagement, products with more harmful ingredients receive fewer reviews, but those with two harmful ingredients attract the highest review counts. Safe sunscreens also garner substantial reviews, indicating consumer interest.
+
+Pricing-wise, the majority of products fall within the 10-20 dollar range, with a declining trend at higher prices. The least represented products are those priced over 50 dollars, while a smaller presence is observed in the 0-10 dollar range. Overall, these insights provide a nuanced understanding of the sunscreen market dynamics.
